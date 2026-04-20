@@ -3,8 +3,11 @@
 #include <stdio.h>
 #include "huffman.h"
 
+// Declaração das funções auxiliares do codigo.c
+U8 pega_bit_codigo(Codigo* c, U64 pos);
+boolean escreve_codigo(FILE* out, Codigo* cod);
 
-// 1- fila de prioridade (min-heap)
+// ==================== FILA DE PRIORIDADE ====================
 
 FilaPrioridade* cria_fila(int capacidade) {
     FilaPrioridade* fp = (FilaPrioridade*)malloc(sizeof(FilaPrioridade));
@@ -69,36 +72,17 @@ int tamanho_fila(FilaPrioridade* fp) {
     return fp->tamanho;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// 2- construição da árvore de Huffman
+// ==================== CONSTRUÇÃO DA ÁRVORE ====================
 
 No* constroi_arvore_huffman(U64 frequencias[256]) {
-    // Conta quantos símbolos aparecem
     int count = 0;
     for (int i = 0; i < 256; i++)
         if (frequencias[i] > 0) count++;
-
+    
     if (count == 0) return NULL;
-
+    
     FilaPrioridade* fp = cria_fila(count);
-
-    // Cria nós folha e insere na fila
+    
     for (int i = 0; i < 256; i++) {
         if (frequencias[i] > 0) {
             No* no = (No*)malloc(sizeof(No));
@@ -108,40 +92,27 @@ No* constroi_arvore_huffman(U64 frequencias[256]) {
             insere_fila(fp, no);
         }
     }
-
-    // Constrói a árvore
+    
     while (tamanho_fila(fp) > 1) {
         No* a = extrai_min(fp);
         No* b = extrai_min(fp);
         No* novo = (No*)malloc(sizeof(No));
-        novo->simbolo = 0;        // nó interno não tem símbolo
+        novo->simbolo = 0;
         novo->frequencia = a->frequencia + b->frequencia;
         novo->esq = a;
         novo->dir = b;
         insere_fila(fp, novo);
     }
-
+    
     No* raiz = extrai_min(fp);
     destroi_fila(fp);
     return raiz;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-// 3- geração dos códigos
+// ==================== GERAÇÃO DOS CÓDIGOS ====================
 
 void gera_codigos(No* raiz, Codigo* codigos[256], Codigo* codigo_atual) {
     if (raiz->esq == NULL && raiz->dir == NULL) {
-        // É folha: armazena uma cópia do código atual
         if (codigos[raiz->simbolo] == NULL) {
             codigos[raiz->simbolo] = (Codigo*)malloc(sizeof(Codigo));
             novo_codigo(codigos[raiz->simbolo]);
@@ -149,31 +120,21 @@ void gera_codigos(No* raiz, Codigo* codigos[256], Codigo* codigo_atual) {
         clone(*codigo_atual, codigos[raiz->simbolo]);
         return;
     }
-
-    // Vai para esquerda (bit 0)
-    adiciona_bit(codigo_atual, 0);
-    gera_codigos(raiz->esq, codigos, codigo_atual);
-    joga_fora_bit(codigo_atual);
-
-    // Vai para direita (bit 1)
-    adiciona_bit(codigo_atual, 1);
-    gera_codigos(raiz->dir, codigos, codigo_atual);
-    joga_fora_bit(codigo_atual);
+    
+    if (raiz->esq) {
+        adiciona_bit(codigo_atual, 0);
+        gera_codigos(raiz->esq, codigos, codigo_atual);
+        joga_fora_bit(codigo_atual);
+    }
+    
+    if (raiz->dir) {
+        adiciona_bit(codigo_atual, 1);
+        gera_codigos(raiz->dir, codigos, codigo_atual);
+        joga_fora_bit(codigo_atual);
+    }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-// 4- liberação da árvore
+// ==================== LIBERAÇÃO DA ÁRVORE ====================
 
 void libera_arvore(No* raiz) {
     if (raiz == NULL) return;
@@ -182,48 +143,33 @@ void libera_arvore(No* raiz) {
     free(raiz);
 }
 
-
-
-
-
-
-
-
-
-// 5- serialização da árvore - pré-ordem
+// ==================== SERIALIZAÇÃO DA ÁRVORE ====================
 
 void serializa_arvore(No* raiz, Codigo* bits) {
     if (raiz->esq == NULL && raiz->dir == NULL) {
-        /* folha: bit 1 + símbolo (8 bits) */
+        // Folha: bit 1 + símbolo (8 bits)
         adiciona_bit(bits, 1);
         for (int i = 7; i >= 0; i--) {
             U8 bit = (raiz->simbolo >> i) & 1;
             adiciona_bit(bits, bit);
         }
     } else {
-        /* nó interno: bit 0 */
+        // Nó interno: bit 0
         adiciona_bit(bits, 0);
         serializa_arvore(raiz->esq, bits);
         serializa_arvore(raiz->dir, bits);
     }
 }
 
-/* Função auxiliar: extrai um bit específico de um Codigo */
-static U8 extrai_bit_do_codigo(Codigo* bits, U64 pos) {
-    U64 byte_idx = pos / 8;
-    int bit_offset = 7 - (int)(pos % 8);
-    return (bits->byte[byte_idx] >> bit_offset) & 1;
-}
-
 No* desserializa_arvore(Codigo* bits, U64* pos) {
-    U8 bit = extrai_bit_do_codigo(bits, *pos);
+    U8 bit = pega_bit_codigo(bits, *pos);
     (*pos)++;
-
+    
     if (bit == 1) {
-        /* folha: lê 8 bits do símbolo */
+        // Folha: lê 8 bits do símbolo
         U8 simbolo = 0;
         for (int i = 0; i < 8; i++) {
-            U8 b = extrai_bit_do_codigo(bits, *pos);
+            U8 b = pega_bit_codigo(bits, *pos);
             (*pos)++;
             simbolo = (simbolo << 1) | b;
         }
@@ -234,7 +180,7 @@ No* desserializa_arvore(Codigo* bits, U64* pos) {
         no->esq = no->dir = NULL;
         return no;
     } else {
-        /* nó interno */
+        // Nó interno
         No* no = (No*)malloc(sizeof(No));
         if (!no) return NULL;
         no->simbolo = 0;
@@ -245,25 +191,8 @@ No* desserializa_arvore(Codigo* bits, U64* pos) {
     }
 }
 
+// ==================== LEITOR DE BITS ====================
 
-
-
-
-
-
-
-
-
-
-// 6- escrita/ leitura de bits em arquivo
-
-static boolean escreve_codigo(FILE* out, Codigo* cod) {
-    size_t bytes = cod->capacidade / 8;
-    size_t escritos = fwrite(cod->byte, 1, bytes, out);
-    return escritos == bytes;
-}
-
-/* Estrutura para leitura bit a bit de um arquivo */
 typedef struct {
     FILE* file;
     U8 buffer;
@@ -276,34 +205,24 @@ static void inicia_leitor(LeitorBits* lb, FILE* f) {
     lb->buffer = 0;
 }
 
-/* Retorna o próximo bit (0 ou 1) ou -1 se EOF */
 static int proximo_bit(LeitorBits* lb) {
     if (lb->bits_restantes == 0) {
         size_t lidos = fread(&lb->buffer, 1, 1, lb->file);
         if (lidos == 0) return -1;
         lb->bits_restantes = 8;
     }
-    int bit = (lb->buffer >> (lb->bits_restantes - 1)) & 1;
     lb->bits_restantes--;
+    int bit = (lb->buffer >> lb->bits_restantes) & 1;
     return bit;
 }
 
-
-
-
-
-
-
-
-
-
-// 7- COMPACTAÇÃO DO ARQUIVO
+// ==================== COMPACTAÇÃO ====================
 
 boolean compacta_arquivo(const char* entrada, const char* saida) {
     FILE* in = fopen(entrada, "rb");
     if (!in) return false;
-
-    /* 1. Contagem de frequências */
+    
+    // 1. Contagem de frequências
     U64 frequencias[256] = {0};
     U8 byte;
     U64 total_bytes = 0;
@@ -312,15 +231,15 @@ boolean compacta_arquivo(const char* entrada, const char* saida) {
         total_bytes++;
     }
     rewind(in);
-
-    /* 2. Construção da árvore */
+    
+    // 2. Construção da árvore
     No* raiz = constroi_arvore_huffman(frequencias);
     if (!raiz) {
         fclose(in);
         return false;
     }
-
-    /* 3. Geração dos códigos */
+    
+    // 3. Geração dos códigos
     Codigo* codigos[256] = {NULL};
     Codigo cod_atual;
     if (!novo_codigo(&cod_atual)) {
@@ -330,8 +249,8 @@ boolean compacta_arquivo(const char* entrada, const char* saida) {
     }
     gera_codigos(raiz, codigos, &cod_atual);
     free_codigo(&cod_atual);
-
-    /* 4. Serialização da árvore (cabeçalho) */
+    
+    // 4. Serialização da árvore
     Codigo cabecalho_bits;
     if (!novo_codigo(&cabecalho_bits)) {
         for (int i = 0; i < 256; i++)
@@ -342,8 +261,8 @@ boolean compacta_arquivo(const char* entrada, const char* saida) {
     }
     serializa_arvore(raiz, &cabecalho_bits);
     U64 tamanho_cabecalho = cabecalho_bits.tamanho;
-
-    /* 5. Abertura do arquivo de saída e escrita do cabeçalho */
+    
+    // 5. Abertura do arquivo de saída
     FILE* out = fopen(saida, "wb");
     if (!out) {
         free_codigo(&cabecalho_bits);
@@ -353,20 +272,16 @@ boolean compacta_arquivo(const char* entrada, const char* saida) {
         fclose(in);
         return false;
     }
-
+    
+    // Escreve cabeçalho: total_bytes (8 bytes) + tamanho_cabecalho (8 bytes)
     fwrite(&total_bytes, sizeof(U64), 1, out);
     fwrite(&tamanho_cabecalho, sizeof(U64), 1, out);
-    boolean ok = escreve_codigo(out, &cabecalho_bits);
-    if (!ok) {
-        fclose(in); fclose(out);
-        free_codigo(&cabecalho_bits);
-        for (int i = 0; i < 256; i++)
-            if (codigos[i]) { free_codigo(codigos[i]); free(codigos[i]); }
-        libera_arvore(raiz);
-        return false;
-    }
-
-    /* 6. Compressão dos dados */
+    
+    // Escreve os bits da árvore serializada
+    U64 bytes_cabecalho = (tamanho_cabecalho + 7) / 8;
+    fwrite(cabecalho_bits.byte, 1, bytes_cabecalho, out);
+    
+    // 6. Compressão dos dados
     Codigo dados_comprimidos;
     if (!novo_codigo(&dados_comprimidos)) {
         fclose(in); fclose(out);
@@ -376,21 +291,21 @@ boolean compacta_arquivo(const char* entrada, const char* saida) {
         libera_arvore(raiz);
         return false;
     }
-
+    
+    rewind(in);
     while (fread(&byte, 1, 1, in) == 1) {
         Codigo* cod = codigos[byte];
-        /* percorre todos os bits do código e adiciona */
         for (U64 i = 0; i < cod->tamanho; i++) {
-            U64 byte_idx = i / 8;
-            int bit_offset = 7 - (int)(i % 8);
-            U8 bit = (cod->byte[byte_idx] >> bit_offset) & 1;
+            U8 bit = pega_bit_codigo(cod, i);
             adiciona_bit(&dados_comprimidos, bit);
         }
     }
-
-    ok = escreve_codigo(out, &dados_comprimidos);
-
-    /* Limpeza */
+    
+    // Escreve os dados comprimidos
+    U64 bytes_dados = (dados_comprimidos.tamanho + 7) / 8;
+    fwrite(dados_comprimidos.byte, 1, bytes_dados, out);
+    
+    // Limpeza
     fclose(in);
     fclose(out);
     free_codigo(&cabecalho_bits);
@@ -398,39 +313,25 @@ boolean compacta_arquivo(const char* entrada, const char* saida) {
     for (int i = 0; i < 256; i++)
         if (codigos[i]) { free_codigo(codigos[i]); free(codigos[i]); }
     libera_arvore(raiz);
-
-    return ok;
+    
+    return true;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// 8- DESCOMPACTAÇÃO DO ARQUIVO
+// ==================== DESCOMPACTAÇÃO ====================
 
 boolean descompacta_arquivo(const char* entrada, const char* saida) {
     FILE* in = fopen(entrada, "rb");
     if (!in) return false;
-
-    /* Lê total de bytes originais e tamanho do cabeçalho em bits */
+    
+    // Lê cabeçalho
     U64 total_bytes, tamanho_cabecalho;
     if (fread(&total_bytes, sizeof(U64), 1, in) != 1 ||
         fread(&tamanho_cabecalho, sizeof(U64), 1, in) != 1) {
         fclose(in);
         return false;
     }
-
-    /* Lê os bytes do cabeçalho serializado */
+    
+    // Lê os bytes do cabeçalho serializado
     U64 bytes_cabecalho = (tamanho_cabecalho + 7) / 8;
     U8* buffer_cabecalho = (U8*)malloc(bytes_cabecalho);
     if (!buffer_cabecalho) {
@@ -442,61 +343,54 @@ boolean descompacta_arquivo(const char* entrada, const char* saida) {
         fclose(in);
         return false;
     }
-
-    /* Prepara Codigo para desserialização */
+    
+    // Prepara Codigo para desserialização
     Codigo bits_cabecalho;
-    if (!novo_codigo(&bits_cabecalho)) {
+    bits_cabecalho.byte = buffer_cabecalho;
+    bits_cabecalho.capacidade = bytes_cabecalho * 8;
+    bits_cabecalho.tamanho = tamanho_cabecalho;
+    
+    // Desserializa a árvore
+    U64 pos = 0;
+    No* raiz = desserializa_arvore(&bits_cabecalho, &pos);
+    if (!raiz) {
         free(buffer_cabecalho);
         fclose(in);
         return false;
     }
-    /* Substitui o byte alocado por buffer_cabecalho (cuidado com free posterior) */
-    free(bits_cabecalho.byte);
-    bits_cabecalho.byte = buffer_cabecalho;
-    bits_cabecalho.capacidade = bytes_cabecalho * 8;
-    bits_cabecalho.tamanho = tamanho_cabecalho;
-
-    /* Desserializa a árvore */
-    U64 pos = 0;
-    No* raiz = desserializa_arvore(&bits_cabecalho, &pos);
-    if (!raiz) {
-        free_codigo(&bits_cabecalho);
-        fclose(in);
-        return false;
-    }
-
-    /* Abre arquivo de saída */
+    
+    // Abre arquivo de saída
     FILE* out = fopen(saida, "wb");
     if (!out) {
-        free_codigo(&bits_cabecalho);
+        free(buffer_cabecalho);
         libera_arvore(raiz);
         fclose(in);
         return false;
     }
-
-    /* Decodifica os dados comprimidos */
+    
+    // Decodifica os dados comprimidos
     LeitorBits lb;
     inicia_leitor(&lb, in);
-
+    
     U64 bytes_emitidos = 0;
     No* atual = raiz;
     while (bytes_emitidos < total_bytes) {
         int bit = proximo_bit(&lb);
-        if (bit < 0) break;   /* fim de arquivo inesperado */
-
+        if (bit < 0) break;
+        
         atual = (bit == 0) ? atual->esq : atual->dir;
-
+        
         if (atual->esq == NULL && atual->dir == NULL) {
             fwrite(&atual->simbolo, 1, 1, out);
             bytes_emitidos++;
             atual = raiz;
         }
     }
-
+    
     fclose(in);
     fclose(out);
-    free_codigo(&bits_cabecalho);
+    free(buffer_cabecalho);
     libera_arvore(raiz);
-
+    
     return (bytes_emitidos == total_bytes);
 }

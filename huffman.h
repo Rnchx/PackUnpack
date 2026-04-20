@@ -3,17 +3,17 @@
 
 #include "meustiposonlinegdb.h"
 #include "codigo.h"
+#include <stdio.h>
 
-//criando o nó da árvore de Huffman
-typedef struct No{
+// Criando o nó da árvore de Huffman
+typedef struct No {
     U8 simbolo;
     U64 frequencia;
     struct No* esq;
     struct No* dir;
 } No;
 
-
-//fila de prioridade (min-heap)
+// Fila de prioridade (min-heap)
 typedef struct {
     No** dados;
     int tamanho;
