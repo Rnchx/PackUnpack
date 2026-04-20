@@ -9,130 +9,118 @@ void limpar_buffer() {
     while ((c = getchar()) != '\n' && c != EOF);
 }
 
-// Função para compactar um texto digitado pelo usuário
-void compactar_texto() {
+// Função que LÊ e MOSTRA o conteúdo de um arquivo
+void mostrar_conteudo_arquivo(const char* nome) {
+    FILE* f = fopen(nome, "rb");
+    if (f) {
+        printf("\n📄 CONTEÚDO DO ARQUIVO '%s':\n", nome);
+        printf("----------------------------------------\n");
+        unsigned char buffer[1000];
+        size_t len = fread(buffer, 1, sizeof(buffer), f);
+        
+        // Tenta mostrar como texto
+        printf("%.*s\n", (int)len, buffer);
+        
+        // Se for arquivo compactado, mostra também em hexa
+        if (strstr(nome, ".huf")) {
+            printf("\n(em hexadecimal): ");
+            for (size_t i = 0; i < len && i < 50; i++) {
+                printf("%02X ", buffer[i]);
+            }
+            if (len > 50) printf("...");
+            printf("\n");
+        }
+        printf("----------------------------------------\n");
+        fclose(f);
+    } else {
+        printf("❌ Não foi possível ler o arquivo '%s'\n", nome);
+    }
+}
+
+// Função que lista arquivos usando comandos do sistema
+void listar_arquivos() {
+    printf("\n========================================\n");
+    printf("     LISTA DE ARQUIVOS (comando ls)     \n");
+    printf("========================================\n");
+    system("ls -la 2>/dev/null || dir 2>nul");
+    printf("========================================\n");
+}
+
+void compactar() {
     char texto[10000];
-    char nome_arquivo[200];
-    FILE* temp;
+    FILE* arquivo_texto;
     
-    printf("\n--- COMPACTACAO ---\n");
+    printf("\n--- COMPACTAR ---\n");
     printf("Digite o texto que deseja compactar: ");
     fgets(texto, sizeof(texto), stdin);
     
-    // Remove o \n do final
     texto[strcspn(texto, "\n")] = 0;
     
     if (strlen(texto) == 0) {
-        printf("✗ Nenhum texto digitado!\n");
+        printf("❌ Nenhum texto digitado!\n");
         return;
     }
     
-    // Cria um arquivo temporário com o texto
-    printf("Digite o nome do arquivo compactado (sem extensao): ");
-    fgets(nome_arquivo, sizeof(nome_arquivo), stdin);
-    nome_arquivo[strcspn(nome_arquivo, "\n")] = 0;
-    
-    if (strlen(nome_arquivo) == 0) {
-        strcpy(nome_arquivo, "compactado");
-    }
-    
-    // Cria arquivo temporário com o texto
-    temp = fopen("temp_texto.txt", "w");
-    if (!temp) {
-        printf("✗ Erro ao criar arquivo temporario!\n");
+    // Cria o arquivo texto.txt
+    arquivo_texto = fopen("texto.txt", "w");
+    if (!arquivo_texto) {
+        printf("❌ Erro ao criar arquivo!\n");
         return;
     }
-    fprintf(temp, "%s", texto);
-    fclose(temp);
+    fprintf(arquivo_texto, "%s", texto);
+    fclose(arquivo_texto);
     
-    // Compacta o arquivo temporário
-    char saida[200];
-    snprintf(saida, sizeof(saida), "%s.huf", nome_arquivo);
+    // PROVA 1: Mostra o conteúdo do arquivo criado
+    mostrar_conteudo_arquivo("texto.txt");
     
-    printf("\nCompactando texto de %zu caracteres...\n", strlen(texto));
-    
-    if (compacta_arquivo("temp_texto.txt", saida)) {
-        printf("✓ Compactacao concluida com sucesso!\n");
-        printf("  Texto original: \"%s\"\n", texto);
-        printf("  Tamanho original: %zu bytes (%zu bits)\n", strlen(texto), strlen(texto) * 8);
-        
-        // Mostra o tamanho do arquivo compactado
-        FILE* f_compactado = fopen(saida, "rb");
-        if (f_compactado) {
-            fseek(f_compactado, 0, SEEK_END);
-            long tamanho_compactado = ftell(f_compactado);
-            printf("  Tamanho compactado: %ld bytes\n", tamanho_compactado);
-            if (strlen(texto) > 0) {
-                float taxa = (1.0 - (float)tamanho_compactado / (strlen(texto))) * 100;
-                printf("  Taxa de compressao: %.1f%%\n", taxa);
-            }
-            fclose(f_compactado);
-        }
-        printf("  Arquivo gerado: %s\n", saida);
+    // Compacta
+    if (compacta_arquivo("texto.txt", "texto_compactado.huf")) {
+        // PROVA 2: Mostra o conteúdo do arquivo compactado
+        mostrar_conteudo_arquivo("texto_compactado.huf");
     } else {
-        printf("✗ Erro na compactacao!\n");
+        printf("❌ ERRO na compactacao!\n");
+        return;
     }
     
-    // Remove o arquivo temporário
-    remove("temp_texto.txt");
+    printf("\n✅ COMPACTACAO REALIZADA COM SUCESSO!\n");
+    
+    // PROVA 3: Lista todos os arquivos do diretório
+    listar_arquivos();
 }
 
-// Função para descompactar um arquivo e mostrar o texto
-void descompactar_texto() {
+void descompactar() {
     char nome_arquivo[200];
-    char saida[200];
-    FILE* f_descompactado;
-    char texto[10000];
     
-    printf("\n--- DESCOMPACTACAO ---\n");
-    printf("Digite o nome do arquivo .huf para descompactar: ");
+    printf("\n--- DESCOMPACTAR ---\n");
+    printf("Digite o nome do arquivo para descompactar: ");
     fgets(nome_arquivo, sizeof(nome_arquivo), stdin);
     nome_arquivo[strcspn(nome_arquivo, "\n")] = 0;
     
-    // Verifica se tem extensão .huf
-    char* extensao = strstr(nome_arquivo, ".huf");
-    if (!extensao) {
+    // Adiciona extensão se não tiver
+    if (!strstr(nome_arquivo, ".huf")) {
         strcat(nome_arquivo, ".huf");
     }
     
     // Verifica se o arquivo existe
     FILE* testa = fopen(nome_arquivo, "rb");
     if (!testa) {
-        printf("✗ Arquivo '%s' nao encontrado!\n", nome_arquivo);
+        printf("❌ Arquivo '%s' nao encontrado!\n", nome_arquivo);
         return;
     }
     fclose(testa);
     
-    // Nome do arquivo descompactado
-    snprintf(saida, sizeof(saida), "temp_descompactado.txt");
-    
-    printf("Descompactando '%s'...\n", nome_arquivo);
-    
-    if (descompacta_arquivo(nome_arquivo, saida)) {
-        // Lê o texto descompactado
-        f_descompactado = fopen(saida, "r");
-        if (f_descompactado) {
-            // Lê o conteúdo do arquivo
-            size_t len = fread(texto, 1, sizeof(texto) - 1, f_descompactado);
-            texto[len] = '\0';
-            fclose(f_descompactado);
-            
-            printf("✓ Descompactacao concluida com sucesso!\n");
-            printf("\n========================================\n");
-            printf("        TEXTO DESCOMPACTADO             \n");
-            printf("========================================\n");
-            printf("%s\n", texto);
-            printf("========================================\n");
-            printf("  Tamanho do texto: %zu caracteres\n", strlen(texto));
-        } else {
-            printf("✓ Descompactacao concluida, mas nao foi possivel ler o texto!\n");
-        }
-        
-        // Remove o arquivo temporário
-        remove(saida);
+    // Descompacta
+    if (descompacta_arquivo(nome_arquivo, "texto_descompactado.txt")) {
+        // PROVA: Mostra o texto descompactado
+        printf("\n📄 ARQUIVO DESCOMPACTADO CRIADO: texto_descompactado.txt\n");
+        mostrar_conteudo_arquivo("texto_descompactado.txt");
     } else {
-        printf("✗ Erro na descompactacao! Verifique se o arquivo .huf e valido.\n");
+        printf("❌ ERRO na descompactacao!\n");
+        return;
     }
+    
+    printf("\n✅ DESCOMPACTACAO REALIZADA COM SUCESSO!\n");
+    listar_arquivos();
 }
 
 void exibir_menu() {
@@ -140,8 +128,8 @@ void exibir_menu() {
     printf("     COMPACTADOR / DESCOMPACTADOR       \n");
     printf("          HUFFMAN - 2026                \n");
     printf("========================================\n");
-    printf("  1 - Compactar um texto                \n");
-    printf("  2 - Descompactar um arquivo           \n");
+    printf("  1 - Compactar                         \n");
+    printf("  2 - Descompactar                      \n");
     printf("  0 - Sair                              \n");
     printf("========================================\n");
     printf("Escolha uma opcao: ");
@@ -153,29 +141,28 @@ int main() {
     printf("\n");
     printf("  ╔════════════════════════════════════════╗\n");
     printf("  ║     COMPACTADOR HUFFMAN v1.0           ║\n");
-    printf("  ║                                        ║\n");
     printf("  ║     Codificacao de Huffman em C        ║\n");
-    printf("  ║    Professor André Luís - Maligno      ║\n");
-    printf("  ║  Professor André Luís - Maligno        ║\n");
+    printf("  ║    Professor Andre Luis - Maligno      ║\n");
+    printf("  ║   Desenvolvedores: Joao Pedro e Caio   ║\n");
     printf("  ╚════════════════════════════════════════╝\n");
     
     do {
         exibir_menu();
         scanf("%d", &opcao);
-        limpar_buffer();  // limpa o buffer do teclado
+        limpar_buffer();
         
         switch (opcao) {
             case 1:
-                compactar_texto();
+                compactar();
                 break;
             case 2:
-                descompactar_texto();
+                descompactar();
                 break;
             case 0:
                 printf("\nSaindo... Obrigado por usar o Compactador Huffman!\n");
                 break;
             default:
-                printf("\n✗ Opcao invalida! Tente novamente.\n");
+                printf("\n❌ Opcao invalida! Tente novamente.\n");
         }
         
     } while (opcao != 0);
