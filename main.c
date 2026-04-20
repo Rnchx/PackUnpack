@@ -9,41 +9,16 @@ void limpar_buffer() {
     while ((c = getchar()) != '\n' && c != EOF);
 }
 
-// Função que LÊ e MOSTRA o conteúdo de um arquivo
-void mostrar_conteudo_arquivo(const char* nome) {
-    FILE* f = fopen(nome, "rb");
+// Mostra o conteúdo de um arquivo
+void mostrar_conteudo(const char* nome) {
+    FILE* f = fopen(nome, "r");
     if (f) {
-        printf("\n📄 CONTEÚDO DO ARQUIVO '%s':\n", nome);
-        printf("----------------------------------------\n");
-        unsigned char buffer[1000];
-        size_t len = fread(buffer, 1, sizeof(buffer), f);
-        
-        // Tenta mostrar como texto
-        printf("%.*s\n", (int)len, buffer);
-        
-        // Se for arquivo compactado, mostra também em hexa
-        if (strstr(nome, ".huf")) {
-            printf("\n(em hexadecimal): ");
-            for (size_t i = 0; i < len && i < 50; i++) {
-                printf("%02X ", buffer[i]);
-            }
-            if (len > 50) printf("...");
-            printf("\n");
-        }
-        printf("----------------------------------------\n");
+        char buffer[10000];
+        size_t len = fread(buffer, 1, sizeof(buffer) - 1, f);
+        buffer[len] = '\0';
+        printf("   Conteudo: \"%s\"\n", buffer);
         fclose(f);
-    } else {
-        printf("❌ Não foi possível ler o arquivo '%s'\n", nome);
     }
-}
-
-// Função que lista arquivos usando comandos do sistema
-void listar_arquivos() {
-    printf("\n========================================\n");
-    printf("     LISTA DE ARQUIVOS (comando ls)     \n");
-    printf("========================================\n");
-    system("ls -la 2>/dev/null || dir 2>nul");
-    printf("========================================\n");
 }
 
 void compactar() {
@@ -53,7 +28,6 @@ void compactar() {
     printf("\n--- COMPACTAR ---\n");
     printf("Digite o texto que deseja compactar: ");
     fgets(texto, sizeof(texto), stdin);
-    
     texto[strcspn(texto, "\n")] = 0;
     
     if (strlen(texto) == 0) {
@@ -63,29 +37,30 @@ void compactar() {
     
     // Cria o arquivo texto.txt
     arquivo_texto = fopen("texto.txt", "w");
-    if (!arquivo_texto) {
-        printf("❌ Erro ao criar arquivo!\n");
-        return;
-    }
     fprintf(arquivo_texto, "%s", texto);
     fclose(arquivo_texto);
     
-    // PROVA 1: Mostra o conteúdo do arquivo criado
-    mostrar_conteudo_arquivo("texto.txt");
+    printf("\n✅ Arquivo criado: texto.txt\n");
+    mostrar_conteudo("texto.txt");
     
     // Compacta
     if (compacta_arquivo("texto.txt", "texto_compactado.huf")) {
-        // PROVA 2: Mostra o conteúdo do arquivo compactado
-        mostrar_conteudo_arquivo("texto_compactado.huf");
+        printf("\n✅ Arquivo criado: texto_compactado.huf (compactado)\n");
+        
+        // Mostra o tamanho do compactado
+        FILE* f = fopen("texto_compactado.huf", "rb");
+        if (f) {
+            fseek(f, 0, SEEK_END);
+            long tamanho = ftell(f);
+            printf("   Tamanho: %ld bytes\n", tamanho);
+            fclose(f);
+        }
     } else {
         printf("❌ ERRO na compactacao!\n");
         return;
     }
     
     printf("\n✅ COMPACTACAO REALIZADA COM SUCESSO!\n");
-    
-    // PROVA 3: Lista todos os arquivos do diretório
-    listar_arquivos();
 }
 
 void descompactar() {
@@ -96,7 +71,6 @@ void descompactar() {
     fgets(nome_arquivo, sizeof(nome_arquivo), stdin);
     nome_arquivo[strcspn(nome_arquivo, "\n")] = 0;
     
-    // Adiciona extensão se não tiver
     if (!strstr(nome_arquivo, ".huf")) {
         strcat(nome_arquivo, ".huf");
     }
@@ -111,16 +85,14 @@ void descompactar() {
     
     // Descompacta
     if (descompacta_arquivo(nome_arquivo, "texto_descompactado.txt")) {
-        // PROVA: Mostra o texto descompactado
-        printf("\n📄 ARQUIVO DESCOMPACTADO CRIADO: texto_descompactado.txt\n");
-        mostrar_conteudo_arquivo("texto_descompactado.txt");
+        printf("\n✅ Arquivo criado: texto_descompactado.txt\n");
+        mostrar_conteudo("texto_descompactado.txt");
     } else {
         printf("❌ ERRO na descompactacao!\n");
         return;
     }
     
     printf("\n✅ DESCOMPACTACAO REALIZADA COM SUCESSO!\n");
-    listar_arquivos();
 }
 
 void exibir_menu() {
@@ -159,10 +131,10 @@ int main() {
                 descompactar();
                 break;
             case 0:
-                printf("\nSaindo... Obrigado por usar o Compactador Huffman!\n");
+                printf("\nSaindo... Obrigado!\n");
                 break;
             default:
-                printf("\n❌ Opcao invalida! Tente novamente.\n");
+                printf("\n❌ Opcao invalida!\n");
         }
         
     } while (opcao != 0);
