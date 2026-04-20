@@ -131,7 +131,7 @@ int main() {
                 descompactar();
                 break;
             case 0:
-                printf("\nSaindo... Obrigado!\n");
+                printf("\nPROGRAMA FINALIZADO COM SUCESSO!\n");
                 break;
             default:
                 printf("\n❌ Opcao invalida!\n");
