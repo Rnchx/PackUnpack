@@ -36,8 +36,13 @@ void libera_arvore(No* raiz);
 void serializa_arvore(No* raiz, Codigo* bits);
 No* desserializa_arvore(Codigo* bits, U64* pos);
 
-// Compactação e descompactação
+// Compactação e descompactação (agora com suporte a qualquer arquivo)
 boolean compacta_arquivo(const char* entrada, const char* saida);
 boolean descompacta_arquivo(const char* entrada, const char* saida);
+
+// NOVAS FUNÇÕES: Para extrair nome do arquivo original
+void extrai_nome_original(const char* caminho, char* nome_original);
+void salva_nome_original(FILE* out, const char* nome_original);
+void recupera_nome_original(FILE* in, char* nome_original, int tamanho_max);
 
 #endif

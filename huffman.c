@@ -191,6 +191,38 @@ No* desserializa_arvore(Codigo* bits, U64* pos) {
     }
 }
 
+// ==================== NOVAS FUNÇÕES PARA NOME DO ARQUIVO ====================
+
+void extrai_nome_original(const char* caminho, char* nome_original) {
+    // Encontra o último '/' ou '\' no caminho
+    const char* barra = strrchr(caminho, '/');
+    const char* barra_inv = strrchr(caminho, '\\');
+    
+    const char* inicio_nome = caminho;
+    if (barra && barra > inicio_nome) inicio_nome = barra + 1;
+    if (barra_inv && barra_inv > inicio_nome) inicio_nome = barra_inv + 1;
+    
+    strcpy(nome_original, inicio_nome);
+}
+
+void salva_nome_original(FILE* out, const char* nome_original) {
+    U16 tamanho = strlen(nome_original);
+    fwrite(&tamanho, sizeof(U16), 1, out);
+    fwrite(nome_original, 1, tamanho, out);
+}
+
+void recupera_nome_original(FILE* in, char* nome_original, int tamanho_max) {
+    U16 tamanho;
+    fread(&tamanho, sizeof(U16), 1, in);
+    if (tamanho < tamanho_max) {
+        fread(nome_original, 1, tamanho, in);
+        nome_original[tamanho] = '\0';
+    } else {
+        fseek(in, tamanho, SEEK_CUR);
+        strcpy(nome_original, "restaurado.bin");
+    }
+}
+
 // ==================== LEITOR DE BITS ====================
 
 typedef struct {
@@ -216,7 +248,7 @@ static int proximo_bit(LeitorBits* lb) {
     return bit;
 }
 
-// ==================== COMPACTAÇÃO ====================
+// ==================== COMPACTAÇÃO (ATUALIZADA) ====================
 
 boolean compacta_arquivo(const char* entrada, const char* saida) {
     FILE* in = fopen(entrada, "rb");
@@ -273,7 +305,12 @@ boolean compacta_arquivo(const char* entrada, const char* saida) {
         return false;
     }
     
-    // Escreve cabeçalho: total_bytes (8 bytes) + tamanho_cabecalho (8 bytes)
+    // Obtém nome original do arquivo
+    char nome_original[512];
+    extrai_nome_original(entrada, nome_original);
+    
+    // NOVO CABEÇALHO: nome_original (tamanho + string) + total_bytes + tamanho_cabecalho + árvore
+    salva_nome_original(out, nome_original);
     fwrite(&total_bytes, sizeof(U64), 1, out);
     fwrite(&tamanho_cabecalho, sizeof(U64), 1, out);
     
@@ -317,11 +354,15 @@ boolean compacta_arquivo(const char* entrada, const char* saida) {
     return true;
 }
 
-// ==================== DESCOMPACTAÇÃO ====================
+// ==================== DESCOMPACTAÇÃO (ATUALIZADA) ====================
 
 boolean descompacta_arquivo(const char* entrada, const char* saida) {
     FILE* in = fopen(entrada, "rb");
     if (!in) return false;
+    
+    // Lê nome original do arquivo
+    char nome_original[512];
+    recupera_nome_original(in, nome_original, sizeof(nome_original));
     
     // Lê cabeçalho
     U64 total_bytes, tamanho_cabecalho;
@@ -359,8 +400,16 @@ boolean descompacta_arquivo(const char* entrada, const char* saida) {
         return false;
     }
     
+    // Define o nome do arquivo de saída (usa o nome original ou o fornecido)
+    char nome_saida[512];
+    if (saida == NULL || strcmp(saida, "") == 0) {
+        strcpy(nome_saida, nome_original);
+    } else {
+        strcpy(nome_saida, saida);
+    }
+    
     // Abre arquivo de saída
-    FILE* out = fopen(saida, "wb");
+    FILE* out = fopen(nome_saida, "wb");
     if (!out) {
         free(buffer_cabecalho);
         libera_arvore(raiz);
